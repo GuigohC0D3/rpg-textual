@@ -23,12 +23,6 @@ from common.protocol import decode, encode
 from .screens import ConnectScreen
 from .widgets import CombatPanel, MapView, Sidebar
 
-MOVE_KEYS = {
-    "w": "n", "up": "n", "s": "s", "down": "s",
-    "a": "w", "left": "w", "d": "e", "right": "e",
-}
-COMBAT_KEYS = {"1": "attack", "2": "defend", "3": "skill", "4": "item", "5": "flee"}
-
 
 class GameScreen(Screen):
     """Tela principal: mapa, chat, ficha e combate, ligados ao servidor."""
@@ -45,6 +39,24 @@ class GameScreen(Screen):
     #cmd { dock: bottom; }
     """
 
+    # Bindings disparam quando o widget focado NÃO consome a tecla.
+    # Com o chat (Input) desfocado, mover/combater funciona; com ele focado,
+    # o Input consome letras/números e as bindings não interferem na digitação.
+    BINDINGS = [
+        ("w,up", "move('n')", "Norte"),
+        ("s,down", "move('s')", "Sul"),
+        ("a,left", "move('w')", "Oeste"),
+        ("d,right", "move('e')", "Leste"),
+        ("1", "combat('attack')", "Atacar"),
+        ("2", "combat('defend')", "Defender"),
+        ("3", "combat('skill')", "Habilidade"),
+        ("4", "combat('item')", "Poção"),
+        ("5", "combat('flee')", "Fugir"),
+        ("r", "rest", "Descansar"),
+        ("enter", "focus_chat", "Chat"),
+        ("escape", "unfocus_chat", "Voltar"),
+    ]
+
     def __init__(self, name: str, cls: str, host: str, port: int):
         super().__init__()
         self.pname = name
@@ -59,15 +71,17 @@ class GameScreen(Screen):
         with Horizontal(id="main"):
             with Vertical(id="left"):
                 yield MapView(id="map")
-                yield RichLog(id="chat", markup=True, wrap=True)
+                # can_focus=False: os logs não roubam o foco nem capturam as setas.
+                yield RichLog(id="chat", markup=True, wrap=True, can_focus=False)
             with Vertical(id="right"):
                 yield Sidebar(id="side")
                 yield CombatPanel(id="combat")
-                yield RichLog(id="log", markup=True, wrap=True)
+                yield RichLog(id="log", markup=True, wrap=True, can_focus=False)
         yield Input(placeholder="Mensagem ou /comando (Enter envia, Esc volta)", id="cmd")
 
     def on_mount(self) -> None:
-        self.set_focus(None)  # foco livre -> teclas vão para movimento
+        # Desfoca o Input após o refresh inicial: começamos no "modo movimento".
+        self.call_after_refresh(lambda: self.set_focus(None))
         self.query_one("#chat", RichLog).write("[cyan]Conectando ao servidor...[/]")
         self.run_worker(self._network(), exclusive=True)
 
@@ -125,34 +139,29 @@ class GameScreen(Screen):
         elif t == P.S_ERROR:
             self.query_one("#chat", RichLog).write(f"[red]{msg['text']}[/]")
 
-    # ================= teclado =================
-    def on_key(self, event) -> None:
-        # se o chat estiver focado, deixe o Input tratar as teclas
-        if self.focused is not None:
-            return
-        key = event.key
-        if key == "enter":
-            self.set_focus(self.query_one("#cmd", Input))
-            event.stop()
-        elif self._in_combat and key in COMBAT_KEYS:
-            self.send_msg({"t": P.C_COMBAT, "action": COMBAT_KEYS[key]})
-            event.stop()
-        elif key in MOVE_KEYS:
-            self.send_msg({"t": P.C_MOVE, "dir": MOVE_KEYS[key]})
-            event.stop()
-        elif key == "r":
-            self.send_msg({"t": P.C_ACTION, "cmd": "rest"})
-            event.stop()
+    # ================= teclado (actions das BINDINGS) =================
+    def action_move(self, direction: str) -> None:
+        self.send_msg({"t": P.C_MOVE, "dir": direction})
+
+    def action_combat(self, combat_action: str) -> None:
+        if self._in_combat:
+            self.send_msg({"t": P.C_COMBAT, "action": combat_action})
+
+    def action_rest(self) -> None:
+        self.send_msg({"t": P.C_ACTION, "cmd": "rest"})
+
+    def action_focus_chat(self) -> None:
+        self.set_focus(self.query_one("#cmd", Input))
+
+    def action_unfocus_chat(self) -> None:
+        self.set_focus(None)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
         if text:
             self.send_msg({"t": P.C_CHAT, "text": text})
         event.input.value = ""
-        self.set_focus(None)  # volta o foco para o movimento
-
-    def key_escape(self) -> None:
-        self.set_focus(None)
+        self.set_focus(None)  # volta para o "modo movimento"
 
 
 class RPGApp(App):
