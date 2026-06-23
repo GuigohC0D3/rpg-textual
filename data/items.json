@@ -1,0 +1,29 @@
+{
+  "rust_sword":   {"name": "Espada Enferrujada", "slot": "weapon",  "rarity": "comum",    "atk": 4,  "value": 10},
+  "iron_sword":   {"name": "Espada de Ferro",    "slot": "weapon",  "rarity": "comum",    "atk": 8,  "value": 35},
+  "flame_blade":  {"name": "Lâmina Flamejante",  "slot": "weapon",  "rarity": "raro",     "atk": 16, "value": 140},
+  "dragon_axe":   {"name": "Machado do Dragão",  "slot": "weapon",  "rarity": "epico",    "atk": 26, "value": 480},
+  "void_scythe":  {"name": "Foice do Vazio",     "slot": "weapon",  "rarity": "lendario", "atk": 40, "value": 1500},
+  "oak_staff":    {"name": "Cajado de Carvalho", "slot": "weapon",  "rarity": "comum",    "atk": 3, "mana": 15, "value": 30},
+  "arcane_staff": {"name": "Cajado Arcano",      "slot": "weapon",  "rarity": "raro",     "atk": 9, "mana": 40, "value": 200},
+  "short_bow":    {"name": "Arco Curto",         "slot": "weapon",  "rarity": "comum",    "atk": 6,  "value": 25},
+  "elven_bow":    {"name": "Arco Élfico",        "slot": "weapon",  "rarity": "epico",    "atk": 22, "crit": 0.1, "value": 520},
+
+  "leather_armor":{"name": "Armadura de Couro",  "slot": "armor",   "rarity": "comum",    "def": 4,  "value": 20},
+  "chain_mail":   {"name": "Cota de Malha",      "slot": "armor",   "rarity": "raro",     "def": 10, "value": 120},
+  "plate_armor":  {"name": "Armadura de Placas", "slot": "armor",   "rarity": "epico",    "def": 18, "hp": 30, "value": 450},
+  "mage_robe":    {"name": "Manto do Mago",      "slot": "armor",   "rarity": "raro",     "def": 5, "mana": 30, "value": 130},
+
+  "wood_shield":  {"name": "Escudo de Madeira",  "slot": "shield",  "rarity": "comum",    "def": 3,  "value": 15},
+  "tower_shield": {"name": "Escudo Torre",       "slot": "shield",  "rarity": "raro",     "def": 9, "hp": 20, "value": 160},
+
+  "luck_amulet":  {"name": "Amuleto da Sorte",   "slot": "amulet",  "rarity": "raro",     "crit": 0.08, "value": 110},
+  "sage_amulet":  {"name": "Amuleto do Sábio",   "slot": "amulet",  "rarity": "epico",    "mana": 40, "value": 300},
+
+  "power_ring":   {"name": "Anel do Poder",      "slot": "ring",    "rarity": "raro",     "atk": 5,  "value": 100},
+  "vital_ring":   {"name": "Anel Vital",         "slot": "ring",    "rarity": "epico",    "hp": 40,  "value": 280},
+
+  "health_potion":{"name": "Poção de Vida",      "slot": "consumable", "rarity": "comum", "heal": 40, "value": 15, "stack": true},
+  "mana_potion":  {"name": "Poção de Mana",      "slot": "consumable", "rarity": "comum", "restore": 35, "value": 15, "stack": true},
+  "elixir":       {"name": "Elixir Maior",       "slot": "consumable", "rarity": "raro",  "heal": 120, "restore": 80, "value": 90, "stack": true}
+}

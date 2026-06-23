@@ -1,0 +1,8 @@
+{
+  "wolf_hunt":   {"name": "Caça aos Lobos",        "type": "kill", "target": "wolf",     "count": 3, "xp": 80,  "gold": 50,  "reward_item": "iron_sword",   "desc": "Os lobos ameaçam a vila. Elimine 3."},
+  "clear_cave":  {"name": "Limpar a Caverna",      "type": "kill", "target": "bat",      "count": 4, "xp": 120, "gold": 70,  "reward_item": "chain_mail",   "desc": "Morcegos infestaram a caverna. Cace 4."},
+  "undead_purge":{"name": "Purgar os Mortos-Vivos","type": "kill", "target": "skeleton", "count": 5, "xp": 180, "gold": 100, "reward_item": "luck_amulet",  "desc": "Esqueletos vagam pelas ruínas. Destrua 5."},
+  "desert_peril":{"name": "Perigo no Deserto",     "type": "kill", "target": "scorpion", "count": 4, "xp": 200, "gold": 120, "reward_item": "sage_amulet",  "desc": "Escorpiões gigantes. Mate 4."},
+  "slay_alpha":  {"name": "O Lobo Alfa",           "type": "boss", "target": "dire_wolf","count": 1, "xp": 400, "gold": 300, "reward_item": "flame_blade",  "desc": "Derrote o Lobo Alfa que lidera a matilha."},
+  "fall_king":   {"name": "Queda do Rei Sombrio",  "type": "boss", "target": "dark_king","count": 1, "xp": 1000,"gold": 800, "reward_item": "void_scythe",  "desc": "Enfrente o Rei Sombrio no castelo. Missão final."}
+}

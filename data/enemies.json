@@ -1,0 +1,16 @@
+{
+  "wolf":       {"name": "Lobo",            "region": "floresta", "hp": 60,  "atk": 10, "def": 3,  "speed": 10, "xp": 22,  "gold": 8,   "art": " /\\_/\\ \n( o.o )\n > ^ < ", "loot": ["health_potion", "rust_sword"]},
+  "bandit":     {"name": "Bandido",         "region": "floresta", "hp": 80,  "atk": 14, "def": 6,  "speed": 8,  "xp": 34,  "gold": 18,  "loot": ["iron_sword", "leather_armor"]},
+  "bat":        {"name": "Morcego Gigante", "region": "caverna",  "hp": 50,  "atk": 11, "def": 2,  "speed": 14, "xp": 24,  "gold": 6,   "loot": ["mana_potion"]},
+  "golem":      {"name": "Golem de Pedra",  "region": "caverna",  "hp": 180, "atk": 18, "def": 16, "speed": 4,  "xp": 70,  "gold": 30,  "loot": ["chain_mail", "wood_shield"]},
+  "skeleton":   {"name": "Esqueleto",       "region": "ruinas",   "hp": 75,  "atk": 15, "def": 7,  "speed": 9,  "xp": 38,  "gold": 15,  "loot": ["iron_sword", "power_ring"]},
+  "wraith":     {"name": "Espectro",        "region": "ruinas",   "hp": 100, "atk": 22, "def": 8,  "speed": 12, "xp": 60,  "gold": 25,  "loot": ["arcane_staff", "luck_amulet"]},
+  "scorpion":   {"name": "Escorpião",       "region": "deserto",  "hp": 90,  "atk": 18, "def": 9,  "speed": 11, "xp": 50,  "gold": 20,  "loot": ["short_bow", "health_potion"]},
+  "mummy":      {"name": "Múmia",           "region": "deserto",  "hp": 130, "atk": 20, "def": 12, "speed": 6,  "xp": 70,  "gold": 35,  "loot": ["sage_amulet", "elixir"]},
+  "guard":      {"name": "Guarda Corrupto", "region": "castelo",  "hp": 150, "atk": 21, "def": 14, "speed": 8,  "xp": 78,  "gold": 40,  "loot": ["plate_armor", "tower_shield"]},
+
+  "dire_wolf":  {"name": "Lobo Alfa",       "region": "floresta", "hp": 320, "atk": 26, "def": 10, "speed": 14, "xp": 220, "gold": 160, "boss": true, "art": "  /\\___/\\ \n ( =^.^= )\n  )     ( \n (  ___  )\n  |_|-|_| ", "skill": "Uivo Selvagem", "loot": ["flame_blade", "elixir"]},
+  "cave_lord":  {"name": "Senhor das Cavernas", "region": "caverna", "hp": 480, "atk": 32, "def": 20, "speed": 6, "xp": 340, "gold": 260, "boss": true, "art": "  ___/\\___ \n |  o  o  |\n |   ww   |\n  \\______/ ", "skill": "Terremoto", "loot": ["dragon_axe", "vital_ring"]},
+  "lich":       {"name": "Lich Ancião",     "region": "ruinas",   "hp": 440, "atk": 38, "def": 14, "speed": 11, "xp": 380, "gold": 300, "boss": true, "art": "   .-\"\"-.  \n  / x  x \\ \n |  ----  |\n  \\ vvvv /\n   '----' ", "skill": "Drenar Alma", "loot": ["void_scythe", "elven_bow"]},
+  "dark_king":  {"name": "Rei Sombrio",     "region": "castelo",  "hp": 700, "atk": 44, "def": 26, "speed": 9, "xp": 650, "gold": 520, "boss": true, "art": "   _mWWWm_ \n  WW(o o)WW\n  | \\___/ |\n   \\_| |_/ ", "skill": "Lâmina Negra", "loot": ["void_scythe", "plate_armor", "vital_ring"]}
+}
