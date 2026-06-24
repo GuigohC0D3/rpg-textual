@@ -57,10 +57,14 @@ SHOP_RARITIES = ("comum", "raro")
 
 
 def shop_catalog() -> list[str]:
-    """IDs à venda na loja, ordenados por preço crescente."""
+    """IDs à venda na loja, ordenados por preço crescente.
+
+    Vende consumíveis e equipamentos comuns/raros. Materiais de forja e itens
+    épicos/lendários ficam de fora (só por loot)."""
     stock = [iid for iid, it in all_items().items()
-             if it.get("value") and (it["slot"] == "consumable"
-                                      or it.get("rarity") in SHOP_RARITIES)]
+             if it.get("value") and (
+                 it["slot"] == "consumable"
+                 or (it["slot"] in EQUIP_SLOTS and it.get("rarity") in SHOP_RARITIES))]
     return sorted(stock, key=item_value)
 
 
