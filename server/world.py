@@ -25,6 +25,8 @@ class Session:
     player: Player
     conn: object                  # network.Connection (evita import circular)
     connected: bool = True
+    view_hw: int = 12             # meia-largura da janela do mapa (tiles)
+    view_hh: int = 6              # meia-altura da janela do mapa (tiles)
 
 
 @dataclass
@@ -55,14 +57,16 @@ class GameState:
         return [s.player.name for s in self.sessions.values() if s.connected]
 
     # ---- visão do mundo para um jogador (janela ao redor) ----
-    def view_for(self, pid: int, radius: int = 9) -> dict:
+    def view_for(self, pid: int) -> dict:
         s = self.sessions[pid]
         px, py = s.player.x, s.player.y
+        hw, hh = s.view_hw, s.view_hh
+        me_color = s.player.color
         rows = []
-        for y in range(py - radius // 2, py + radius // 2 + 1):
+        for y in range(py - hh, py + hh + 1):
             row = []
-            for x in range(px - radius, px + radius + 1):
-                row.append(self._cell(x, y, px, py))
+            for x in range(px - hw, px + hw + 1):
+                row.append(self._cell(x, y, px, py, me_color))
             rows.append(row)
         return {
             "rows": rows,
@@ -70,15 +74,15 @@ class GameState:
             "pos": [px, py],
         }
 
-    def _cell(self, x: int, y: int, px: int, py: int) -> dict:
+    def _cell(self, x: int, y: int, px: int, py: int, me_color: str = "bright_white") -> dict:
         """Descreve um tile: terreno, ocupantes (jogadores/inimigos)."""
         if not self.world.in_bounds(x, y):
             return {"ch": " ", "color": "black"}
         if x == px and y == py:
-            return {"ch": "@", "color": "bright_white"}
+            return {"ch": "@", "color": me_color}             # você, na sua cor
         others = self.players_at(x, y)
         if others:
-            return {"ch": "P", "color": "bright_cyan"}
+            return {"ch": "P", "color": others[0].player.color}  # outro jogador, na cor dele
         if (x, y) in self.world.enemies:
             e = self.world.enemies[(x, y)]
             return {"ch": "&" if e.boss else "e",

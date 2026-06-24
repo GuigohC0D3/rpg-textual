@@ -19,6 +19,20 @@ def xp_to_next(level: int) -> int:
     return 50 + (level - 1) * 50
 
 
+# Cores com que o jogador pode se identificar no mapa/ficha. São nomes válidos
+# do Rich (funcionam ao renderar widgets, ao contrário do CSS do Textual).
+PLAYER_COLORS = [
+    "bright_white", "bright_red", "bright_green", "bright_yellow",
+    "bright_blue", "bright_magenta", "bright_cyan", "orange1",
+]
+DEFAULT_COLOR = "bright_white"
+
+
+def sanitize_color(color: str | None) -> str:
+    """Garante que a cor recebida da rede é uma da paleta (evita markup malicioso)."""
+    return color if color in PLAYER_COLORS else DEFAULT_COLOR
+
+
 @dataclass
 class Player:
     name: str
@@ -43,13 +57,14 @@ class Player:
     party: str | None = None                                  # id do grupo
     guild: str | None = None                                  # nome da guilda
     pet: dict | None = None                                   # {"name", "atk"}
+    color: str = DEFAULT_COLOR                                # cor de identificação no mapa
 
     # ---- criação ----
     @classmethod
-    def create(cls, name: str, klass: str) -> "Player":
+    def create(cls, name: str, klass: str, color: str = DEFAULT_COLOR) -> "Player":
         base = CLASSES[klass]
         p = cls(
-            name=name, cls=klass,
+            name=name, cls=klass, color=sanitize_color(color),
             max_hp=base["hp"], hp=base["hp"],
             max_mana=base["mana"], mana=base["mana"],
             base_atk=base["atk"], base_def=base["def"],
@@ -195,5 +210,5 @@ class Player:
             "inventory": self.inventory, "equipment": self.equipment,
             "skill": self.skill["name"],
             "quests": self.quests, "party": self.party,
-            "guild": self.guild, "pet": self.pet,
+            "guild": self.guild, "pet": self.pet, "color": self.color,
         }

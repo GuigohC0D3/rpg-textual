@@ -10,6 +10,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Input, Label, RadioButton, RadioSet, Static
 
 from game.classes import CLASSES
+from game.player import PLAYER_COLORS
 
 
 class ConnectScreen(Screen):
@@ -35,6 +36,10 @@ class ConnectScreen(Screen):
             with RadioSet(id="cls"):
                 for i, (name, data) in enumerate(CLASSES.items()):
                     yield RadioButton(f"{name} — {data['desc']}", value=(i == 0))
+            yield Label("Cor (sua identificação no mapa):")
+            with RadioSet(id="color"):
+                for i, c in enumerate(PLAYER_COLORS):
+                    yield RadioButton(f"[{c}]██[/] {c}", value=(i == 0))
             yield Input(value="127.0.0.1", placeholder="IP do servidor", id="host")
             yield Input(value="7777", placeholder="Porta", id="port")
             yield Button("Entrar na Aventura", variant="success", id="go")
@@ -52,6 +57,8 @@ class ConnectScreen(Screen):
         port_raw = self.query_one("#port", Input).value.strip()
         cls_idx = self.query_one("#cls", RadioSet).pressed_index
         cls_name = list(CLASSES.keys())[max(0, cls_idx)]
+        color_idx = self.query_one("#color", RadioSet).pressed_index
+        color = PLAYER_COLORS[max(0, color_idx)]
         if not name:
             self.query_one("#err", Static).update("Informe um nome.")
             return
@@ -60,4 +67,4 @@ class ConnectScreen(Screen):
         except ValueError:
             self.query_one("#err", Static).update("Porta inválida.")
             return
-        self.app.start_game(name, cls_name, host, port)
+        self.app.start_game(name, cls_name, color, host, port)

@@ -18,6 +18,7 @@ C_MOVE = "move"        # {dir: n|s|e|w}
 C_CHAT = "chat"        # {text}
 C_COMBAT = "combat"    # {action: attack|defend|skill|item|flee, item?}
 C_ACTION = "action"    # {cmd: pickup|talk|rest}
+C_VIEW = "view"        # {cols, rows}  -> tamanho do mapa (em tiles) p/ preencher o painel
 C_PING = "ping"        # {}
 
 # ---- Tipos de mensagem SERVIDOR -> CLIENTE ----

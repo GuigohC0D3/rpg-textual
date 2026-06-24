@@ -112,3 +112,33 @@ class World:
         pool = enemies_for_region(region)
         if pool:
             self.enemies[(x, y)] = Enemy.spawn(self.rng.choice(pool))
+
+    def wander_enemies(self, skip=frozenset(), move_chance: float = 0.25):
+        """Move inimigos (exceto chefes) para um tile adjacente válido.
+
+        Regras: permanece no mapa, NUNCA entra em zona segura (vila) e não pisa
+        sobre outro inimigo. Chefes ficam parados guardando sua região. `skip`
+        contém posições a ignorar (ex.: inimigos em combate ativo).
+        Retorna [(pos_antiga, pos_nova, enemy)] dos que efetivamente se moveram.
+        """
+        moves = []
+        for pos in list(self.enemies.keys()):
+            if pos in skip:
+                continue
+            enemy = self.enemies[pos]
+            if getattr(enemy, "boss", False):
+                continue
+            if self.rng.random() >= move_chance:
+                continue
+            dx, dy = self.rng.choice(((0, 1), (0, -1), (1, 0), (-1, 0)))
+            nx, ny = pos[0] + dx, pos[1] + dy
+            if not self.in_bounds(nx, ny):
+                continue
+            if REGIONS[self.grid[ny][nx]]["safe"]:   # bloqueia a vila/zonas seguras
+                continue
+            if (nx, ny) in self.enemies:             # tile já ocupado por inimigo
+                continue
+            del self.enemies[pos]
+            self.enemies[(nx, ny)] = enemy
+            moves.append((pos, (nx, ny), enemy))
+        return moves

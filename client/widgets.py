@@ -10,7 +10,12 @@ from __future__ import annotations
 from rich.text import Text
 from textual.widgets import Static
 
+from common import protocol as P
 from game.items import describe, item_name
+
+# Linhas do painel do mapa gastas com cabeçalho (info + branco) e rodapé (legenda).
+MAP_HEADER_LINES = 2
+MAP_FOOTER_LINES = 1
 
 RARITY_STYLE = {"comum": "white", "raro": "cyan", "epico": "magenta", "lendario": "yellow"}
 
@@ -31,7 +36,7 @@ class Sidebar(Static):
 
     def update_panel(self, p: dict) -> None:
         t = Text()
-        t.append(f"{p['name']}\n", style="bold bright_white")
+        t.append(f"{p['name']}\n", style=f"bold {p.get('color', 'bright_white')}")
         t.append(f"{p['cls']} • Nível {p['level']}\n\n", style="bright_yellow")
 
         t.append("HP   ", style="bold"); t.append(_bar(p["hp"], p["max_hp"], 12, "red")); t.append("\n")
@@ -74,7 +79,25 @@ def _rarity(item_id: str) -> str:
 
 
 class MapView(Static):
-    """Renderiza a janela do mundo ao redor do jogador, com cores por região."""
+    """Renderiza a janela do mundo ao redor do jogador, com cores por região.
+
+    A janela é dimensionada para preencher todo o painel: o widget informa ao
+    servidor quantos tiles cabem (cols/rows) e recebe o recorte exato do mundo.
+    """
+
+    def on_resize(self, event) -> None:
+        self.send_viewport()
+
+    def send_viewport(self) -> None:
+        """Informa ao servidor o tamanho do mapa (em tiles) que cabe no painel."""
+        cs = self.content_size
+        if cs.width <= 0 or cs.height <= 0:
+            return
+        cols = max(8, cs.width // 2)                                   # 2 colunas por tile
+        rows = max(6, cs.height - MAP_HEADER_LINES - MAP_FOOTER_LINES)
+        screen = self.screen
+        if hasattr(screen, "send_msg"):
+            screen.send_msg({"t": P.C_VIEW, "cols": cols, "rows": rows})
 
     def update_view(self, view: dict, daynight: str, weather: str, hour: int) -> None:
         t = Text()
@@ -86,8 +109,8 @@ class MapView(Static):
                 t.append(cell["ch"], style=cell["color"])
                 t.append(" ")
             t.append("\n")
-        t.append("\n@ você  P outro  e inimigo  & CHEFE\n", style="grey62")
-        t.append("Mover: WASD/setas • Chat: Enter • Combate: 1-5", style="grey50")
+        t.append("@ você  P outro  e inimigo  & CHEFE  •  "
+                 "WASD mover · Enter chat · 1-5 combate", style="grey50")
         self.update(t)
 
 

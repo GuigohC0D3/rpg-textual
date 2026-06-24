@@ -57,10 +57,11 @@ class GameScreen(Screen):
         ("escape", "unfocus_chat", "Voltar"),
     ]
 
-    def __init__(self, name: str, cls: str, host: str, port: int):
+    def __init__(self, name: str, cls: str, color: str, host: str, port: int):
         super().__init__()
         self.pname = name
         self.pcls = cls
+        self.pcolor = color
         self.host = host
         self.port = port
         self._writer: asyncio.StreamWriter | None = None
@@ -97,7 +98,8 @@ class GameScreen(Screen):
             try:
                 reader, writer = await asyncio.open_connection(self.host, self.port)
                 self._writer = writer
-                writer.write(encode({"t": P.C_JOIN, "name": self.pname, "cls": self.pcls}))
+                writer.write(encode({"t": P.C_JOIN, "name": self.pname,
+                                     "cls": self.pcls, "color": self.pcolor}))
                 await writer.drain()
                 self._status("[green]Conectado.[/]")
                 backoff = 1
@@ -129,6 +131,9 @@ class GameScreen(Screen):
         t = msg.get("t")
         if t in (P.S_WELCOME, P.S_YOU):
             self.query_one("#side", Sidebar).update_panel(msg["player"])
+            if t == P.S_WELCOME:
+                # já conectado e com layout pronto: pede a janela do tamanho do painel
+                self.query_one("#map", MapView).send_viewport()
         elif t == P.S_STATE:
             self.query_one("#map", MapView).update_view(
                 msg["view"], msg["daynight"], msg["weather"], msg["hour"])
@@ -175,8 +180,8 @@ class RPGApp(App):
     def on_mount(self) -> None:
         self.push_screen(ConnectScreen())
 
-    def start_game(self, name: str, cls: str, host: str, port: int) -> None:
-        self.push_screen(GameScreen(name, cls, host, port))
+    def start_game(self, name: str, cls: str, color: str, host: str, port: int) -> None:
+        self.push_screen(GameScreen(name, cls, color, host, port))
 
 
 def main() -> None:

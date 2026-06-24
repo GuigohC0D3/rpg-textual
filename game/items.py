@@ -45,6 +45,25 @@ def is_equippable(item_id: str) -> bool:
     return bool(it) and it["slot"] in EQUIP_SLOTS
 
 
+def item_value(item_id: str) -> int:
+    """Valor base de mercado do item (0 se não tiver preço)."""
+    it = get_item(item_id)
+    return int(it.get("value", 0)) if it else 0
+
+
+# A loja vende consumíveis e equipamentos comuns/raros; épicos e lendários
+# permanecem exclusivos de loot/drop para preservar a progressão.
+SHOP_RARITIES = ("comum", "raro")
+
+
+def shop_catalog() -> list[str]:
+    """IDs à venda na loja, ordenados por preço crescente."""
+    stock = [iid for iid, it in all_items().items()
+             if it.get("value") and (it["slot"] == "consumable"
+                                      or it.get("rarity") in SHOP_RARITIES)]
+    return sorted(stock, key=item_value)
+
+
 def describe(item_id: str) -> str:
     """Texto curto com nome, raridade e bônus — usado em logs/inventário."""
     it = get_item(item_id)

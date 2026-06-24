@@ -14,13 +14,15 @@ from __future__ import annotations
 import asyncio
 import random
 import sys
+from dataclasses import dataclass, field
 
 from common import protocol as P
 from game.combat import Encounter
-from game.items import describe, get_item, item_name
+from game.items import describe, get_item, item_name, item_value, shop_catalog
 from game.map import REGIONS
-from game.player import Player
+from game.player import Player, sanitize_color
 from game.quests import all_quests, offer
+from game.ranking import leaderboard
 
 from .network import Connection, serve
 from .world import WEATHERS, GameState, Session
@@ -28,11 +30,30 @@ from .world import WEATHERS, GameState, Session
 MOVES = {"n": (0, -1), "s": (0, 1), "e": (1, 0), "w": (-1, 0)}
 
 
+@dataclass
+class TradeSession:
+    """Troca ativa entre dois jogadores. Cada lado monta uma oferta e ambos
+    precisam confirmar; qualquer alteração na oferta zera as confirmações."""
+    a: int
+    b: int
+    offer: dict = field(default_factory=dict)        # pid -> {"gold": int, "items": {id: qty}}
+    confirmed: set = field(default_factory=set)       # pids que confirmaram
+
+    def __post_init__(self) -> None:
+        self.offer = {self.a: {"gold": 0, "items": {}},
+                      self.b: {"gold": 0, "items": {}}}
+
+    def partner(self, pid: int) -> int:
+        return self.b if pid == self.a else self.a
+
+
 class GameServer:
     def __init__(self, seed: int | None = None):
         self.state = GameState(seed=seed)
         self.conns: dict[int, Connection] = {}        # cid -> Connection
         self.invites: dict[int, int] = {}             # pid_alvo -> party_id pendente
+        self.trade_req: dict[int, int] = {}           # pid_alvo -> pid_solicitante
+        self.trades: dict[int, TradeSession] = {}     # pid -> sessão de troca ativa
         self._next_pid = 1
 
     # ================= envio / broadcast =================
@@ -93,6 +114,8 @@ class GameServer:
             if s:
                 s.connected = False
                 s.player.save()
+                self._trade_cancel(conn.pid)           # cancela troca pendente, se houver
+                self.trade_req.pop(conn.pid, None)
                 self.broadcast({"t": P.S_CHAT, "from": "Sistema", "scope": "global",
                                 "text": f"{s.player.name} desconectou."})
 
@@ -111,6 +134,8 @@ class GameServer:
             self._handle_combat(conn.pid, msg.get("action"), msg.get("item"))
         elif t == P.C_ACTION:
             self._handle_action(conn.pid, msg.get("cmd"))
+        elif t == P.C_VIEW:
+            self._handle_view(conn.pid, msg)
         elif t == P.C_PING:
             conn.send({"t": P.C_PING})
 
@@ -118,6 +143,7 @@ class GameServer:
     async def _handle_join(self, conn: Connection, msg: dict) -> None:
         name = (msg.get("name") or "Herói").strip()[:16]
         klass = msg.get("cls", "Guerreiro")
+        color = sanitize_color(msg.get("color"))
 
         # reconexão: se já existe sessão com esse nome, reusa o pid
         existing = next((s for s in self.state.sessions.values()
@@ -135,9 +161,11 @@ class GameServer:
         # carrega save ou cria novo personagem
         player = Player.load(name)
         if player is None:
-            player = Player.create(name, klass)
+            player = Player.create(name, klass, color)
             player.x, player.y = self.state.world.spawn
             offer(player, "wolf_hunt")  # missão inicial
+        else:
+            player.color = color  # permite trocar a cor de identificação ao relogar
         pid = self._next_pid
         self._next_pid += 1
         conn.pid = pid
@@ -180,6 +208,19 @@ class GameServer:
         # atualiza quem estiver por perto (para ver o movimento)
         self._refresh_nearby(pid)
 
+    def _handle_view(self, pid: int, msg: dict) -> None:
+        """Ajusta o tamanho da janela do mapa ao painel do cliente (preenche tudo)."""
+        s = self.state.sessions.get(pid)
+        if not s:
+            return
+        cols = int(msg.get("cols", 25))
+        rows = int(msg.get("rows", 13))
+        hw = max(4, min(40, (cols - 1) // 2))
+        hh = max(3, min(24, (rows - 1) // 2))
+        if (hw, hh) != (s.view_hw, s.view_hh):
+            s.view_hw, s.view_hh = hw, hh
+            self.send_state(pid)
+
     def _refresh_nearby(self, pid: int) -> None:
         s = self.state.sessions[pid]
         for other in self.state.sessions.values():
@@ -194,7 +235,8 @@ class GameServer:
     def _start_encounter(self, pid: int, pos: tuple[int, int]) -> None:
         enc = self.state.encounters.get(pos)
         if enc is None:
-            enc = Encounter(enemy=self.state.world.enemies[pos], pos=pos)
+            enc = Encounter(enemy=self.state.world.enemies[pos], pos=pos,
+                            xp_mult=self.state.xp_mult)
             self.state.encounters[pos] = enc
         p = self.state.sessions[pid].player
         enc.add(pid, p)
@@ -307,7 +349,9 @@ class GameServer:
     def _cmd_help(self, pid, args):
         self.log(pid,
             "Comandos: /help /who /msg <nome> <txt> /party [invite|accept] /roll [N] "
-            "/emote <txt> /trade <nome> /quests /accept <id> /equip <id> /use <id> /rest")
+            "/emote <txt> /trade <nome> (depois: accept|gold|item|confirm|cancel) "
+            "/quests /accept <id> /equip <id> /use <id> /rest "
+            "/shop [buy|sell] /guild [create|join|leave|info|list] /ranking")
 
     def _cmd_who(self, pid, args):
         self.log(pid, "Online: " + ", ".join(self.state.online_names()))
@@ -342,17 +386,160 @@ class GameServer:
         self.broadcast({"t": P.S_CHAT, "from": "*", "scope": "global",
                         "text": f"{name} {' '.join(args)}"})
 
+    # ---- comércio entre jogadores ----
     def _cmd_trade(self, pid, args):
-        if not args:
-            self.log(pid, "Uso: /trade <nome>")
-            return
+        sub = args[0].lower() if args else "status"
+        if sub == "accept":
+            self._trade_accept(pid)
+        elif sub == "gold":
+            self._trade_set_gold(pid, args[1:])
+        elif sub == "item":
+            self._trade_add_item(pid, args[1:])
+        elif sub == "confirm":
+            self._trade_confirm(pid)
+        elif sub == "cancel":
+            self._trade_cancel(pid, by_self=True)
+        elif sub == "status":
+            sess = self.trades.get(pid)
+            if sess:
+                self._trade_show(sess)
+            else:
+                self.log(pid, "Uso: /trade <nome> | accept | gold <n> | "
+                              "item <id> [qtd] | confirm | cancel")
+        else:
+            self._trade_request(pid, args)
+
+    def _trade_request(self, pid, args):
         target = self._find_by_name(args[0])
         if not target:
             self.log(pid, "Jogador não encontrado.")
             return
+        if target.pid == pid:
+            self.log(pid, "Você não pode comerciar consigo mesmo.")
+            return
+        if pid in self.trades or target.pid in self.trades:
+            self.log(pid, "Um dos jogadores já está em uma troca.")
+            return
+        self.trade_req[target.pid] = pid
         sender = self.state.sessions[pid].player.name
-        self.log(target.pid, f"💱 {sender} quer comerciar (recurso em desenvolvimento).")
+        self.log(target.pid, f"💱 {sender} quer comerciar. Use /trade accept.")
         self.log(pid, f"Pedido de troca enviado a {target.player.name}.")
+
+    def _trade_accept(self, pid):
+        requester = self.trade_req.pop(pid, None)
+        if requester is None or requester not in self.state.sessions:
+            self.log(pid, "Nenhum pedido de troca pendente.")
+            return
+        if pid in self.trades or requester in self.trades:
+            self.log(pid, "Um dos jogadores já está em uma troca.")
+            return
+        sess = TradeSession(a=requester, b=pid)
+        self.trades[requester] = sess
+        self.trades[pid] = sess
+        self.log_many([requester, pid],
+                      "💱 Troca iniciada. Comandos: /trade gold <n> | item <id> [qtd] | "
+                      "confirm | cancel")
+        self._trade_show(sess)
+
+    def _trade_set_gold(self, pid, args):
+        sess = self.trades.get(pid)
+        if not sess:
+            self.log(pid, "Você não está em uma troca.")
+            return
+        if not args or not args[0].isdigit():
+            self.log(pid, "Uso: /trade gold <quantidade>")
+            return
+        amount = int(args[0])
+        if amount > self.state.sessions[pid].player.gold:
+            self.log(pid, "Você não tem ouro suficiente.")
+            return
+        sess.offer[pid]["gold"] = amount
+        sess.confirmed.clear()
+        self._trade_show(sess)
+
+    def _trade_add_item(self, pid, args):
+        sess = self.trades.get(pid)
+        if not sess:
+            self.log(pid, "Você não está em uma troca.")
+            return
+        if not args:
+            self.log(pid, "Uso: /trade item <item_id> [qtd]")
+            return
+        item_id = args[0]
+        qty = int(args[1]) if len(args) > 1 and args[1].isdigit() else 1
+        p = self.state.sessions[pid].player
+        if qty <= 0:
+            sess.offer[pid]["items"].pop(item_id, None)   # qtd 0 remove da oferta
+        elif p.inventory.get(item_id, 0) < qty:
+            self.log(pid, f"Você não possui {qty}x {item_id}.")
+            return
+        else:
+            sess.offer[pid]["items"][item_id] = qty
+        sess.confirmed.clear()
+        self._trade_show(sess)
+
+    def _trade_confirm(self, pid):
+        sess = self.trades.get(pid)
+        if not sess:
+            self.log(pid, "Você não está em uma troca.")
+            return
+        sess.confirmed.add(pid)
+        if sess.confirmed >= {sess.a, sess.b}:
+            self._trade_execute(sess)
+        else:
+            pname = self.state.sessions[pid].player.name
+            self.log(sess.partner(pid), f"💱 {pname} confirmou. Use /trade confirm para fechar.")
+            self.log(pid, "Você confirmou. Aguardando o outro jogador.")
+
+    def _trade_execute(self, sess):
+        pa = self.state.sessions[sess.a].player
+        pb = self.state.sessions[sess.b].player
+        oa, ob = sess.offer[sess.a], sess.offer[sess.b]
+        # revalidação final (o estado pode ter mudado desde a confirmação)
+        if (oa["gold"] > pa.gold or ob["gold"] > pb.gold
+                or any(pa.inventory.get(i, 0) < q for i, q in oa["items"].items())
+                or any(pb.inventory.get(i, 0) < q for i, q in ob["items"].items())):
+            self.log_many([sess.a, sess.b], "💱 Troca falhou: ouro/itens insuficientes.")
+            self._trade_cleanup(sess)
+            return
+        # transferência atômica de ouro
+        pa.gold += ob["gold"] - oa["gold"]
+        pb.gold += oa["gold"] - ob["gold"]
+        # transferência de itens
+        for i, q in oa["items"].items():
+            pa.remove_item(i, q); pb.add_item(i, q)
+        for i, q in ob["items"].items():
+            pb.remove_item(i, q); pa.add_item(i, q)
+        pa.save(); pb.save()
+        self.log_many([sess.a, sess.b], "✅ Troca concluída!")
+        self.send_panel(sess.a)
+        self.send_panel(sess.b)
+        self._trade_cleanup(sess)
+
+    def _trade_cancel(self, pid, by_self=False):
+        sess = self.trades.get(pid)
+        if not sess:
+            if by_self:
+                self.log(pid, "Você não está em uma troca.")
+            return
+        self.log_many([sess.a, sess.b], "💱 Troca cancelada.")
+        self._trade_cleanup(sess)
+
+    def _trade_cleanup(self, sess):
+        self.trades.pop(sess.a, None)
+        self.trades.pop(sess.b, None)
+
+    def _trade_show(self, sess):
+        def fmt(o):
+            items = ", ".join(f"{i} x{q}" for i, q in o["items"].items()) or "—"
+            return f"{o['gold']} ouro | {items}"
+        for pid in (sess.a, sess.b):
+            partner = sess.partner(pid)
+            pname = self.state.sessions[partner].player.name
+            you = "✓" if pid in sess.confirmed else "…"
+            them = "✓" if partner in sess.confirmed else "…"
+            self.log(pid, f"💱 Sua oferta [{you}]: {fmt(sess.offer[pid])}")
+            self.log(pid, f"💱 {pname} [{them}]: {fmt(sess.offer[partner])}")
 
     def _cmd_party(self, pid, args):
         if not args:  # cria grupo
@@ -433,7 +620,152 @@ class GameServer:
     def _cmd_rest(self, pid, args):
         self._handle_action(pid, "rest")
 
+    # ---- guildas ----
+    def _cmd_guild(self, pid, args):
+        p = self.state.sessions[pid].player
+        g = self.state.guilds
+        usage = "Uso: /guild create <nome> | join <nome> | leave | info <nome> | list"
+        if not args:
+            self.log(pid, g.info(p.guild) if p.guild else usage)
+            return
+        sub = args[0].lower()
+        if sub == "create" and len(args) >= 2:
+            ok, msg = g.create(" ".join(args[1:])[:24], p.name)
+            if ok:
+                p.guild = g.find_player(p.name)
+            self.log(pid, msg)
+            self.send_panel(pid)
+        elif sub == "join" and len(args) >= 2:
+            ok, msg = g.add_member(" ".join(args[1:]), p.name)
+            if ok:
+                p.guild = g.find_player(p.name)
+            self.log(pid, msg)
+            self.send_panel(pid)
+        elif sub == "leave":
+            ok, msg = g.leave(p.name)
+            if ok:
+                p.guild = None
+            self.log(pid, msg)
+            self.send_panel(pid)
+        elif sub == "info" and len(args) >= 2:
+            self.log(pid, g.info(" ".join(args[1:])) or "Guilda inexistente.")
+        elif sub == "list":
+            names = g.list_names()
+            self.log(pid, "🏰 Guildas: " + (", ".join(names) if names else "nenhuma ainda."))
+        else:
+            self.log(pid, usage)
+
+    # ---- loja (apenas em zona segura) ----
+    SELL_RATE = 0.5   # fração do valor base recebida ao vender
+
+    def _cmd_shop(self, pid, args):
+        p = self.state.sessions[pid].player
+        region = self.state.world.region_at(p.x, p.y)
+        if not REGIONS[region]["safe"]:
+            self.log(pid, "🏪 Só há lojas em zonas seguras (Vila).")
+            return
+        sub = args[0].lower() if args else "list"
+        if sub == "list":
+            self._shop_list(pid)
+        elif sub == "buy":
+            self._shop_buy(pid, args[1:])
+        elif sub == "sell":
+            self._shop_sell(pid, args[1:])
+        else:
+            self.log(pid, "Uso: /shop | /shop buy <id> [qtd] | /shop sell <id> [qtd]")
+
+    def _shop_list(self, pid):
+        p = self.state.sessions[pid].player
+        self.log(pid, f"🏪 — Loja da Vila — (seu ouro: {p.gold})")
+        for iid in shop_catalog():
+            it = get_item(iid)
+            self.log(pid, f"  [{iid}] {it['name']} — {item_value(iid)} ouro ({it['rarity']})")
+        self.log(pid, "Compre: /shop buy <id> [qtd] · Venda (50%): /shop sell <id> [qtd]")
+
+    def _shop_buy(self, pid, args):
+        if not args:
+            self.log(pid, "Uso: /shop buy <item_id> [qtd]")
+            return
+        p = self.state.sessions[pid].player
+        iid = args[0]
+        qty = int(args[1]) if len(args) > 1 and args[1].isdigit() else 1
+        if qty <= 0:
+            self.log(pid, "Quantidade inválida.")
+            return
+        if iid not in shop_catalog():
+            self.log(pid, "Item indisponível na loja (veja /shop).")
+            return
+        cost = item_value(iid) * qty
+        if p.gold < cost:
+            self.log(pid, f"Ouro insuficiente: custa {cost}, você tem {p.gold}.")
+            return
+        p.gold -= cost
+        p.add_item(iid, qty)
+        p.save()
+        self.log(pid, f"🛒 Comprou {qty}x {item_name(iid)} por {cost} ouro.")
+        self.send_panel(pid)
+
+    def _shop_sell(self, pid, args):
+        if not args:
+            self.log(pid, "Uso: /shop sell <item_id> [qtd]")
+            return
+        p = self.state.sessions[pid].player
+        iid = args[0]
+        qty = int(args[1]) if len(args) > 1 and args[1].isdigit() else 1
+        if qty <= 0:
+            self.log(pid, "Quantidade inválida.")
+            return
+        if not get_item(iid):
+            self.log(pid, "Item desconhecido.")
+            return
+        if p.inventory.get(iid, 0) < qty:
+            self.log(pid, f"Você não possui {qty}x {iid}.")
+            return
+        gain = max(1, int(item_value(iid) * self.SELL_RATE)) * qty
+        p.remove_item(iid, qty)
+        p.gold += gain
+        p.save()
+        self.log(pid, f"💰 Vendeu {qty}x {item_name(iid)} por {gain} ouro.")
+        self.send_panel(pid)
+
+    # ---- ranking ----
+    def _cmd_ranking(self, pid, args):
+        live = {s.player.name.lower(): {
+                    "name": s.player.name, "cls": s.player.cls,
+                    "level": s.player.level, "xp": s.player.xp, "gold": s.player.gold}
+                for s in self.state.sessions.values() if s.connected}
+        self.log(pid, "🏆 — Ranking (top 10) —")
+        for i, e in enumerate(leaderboard(live), 1):
+            self.log(pid, f"  {i}. {e['name']} — {e['cls']} Nv {e['level']} ({e['xp']} XP)")
+
+    def _cmd_rank(self, pid, args):
+        self._cmd_ranking(pid, args)
+
+    # ================= eventos globais =================
+    def _tick_xp_event(self) -> None:
+        """Bênção de XP global: a cada tick, chance de iniciar/encerrar XP em dobro."""
+        if self.state.xp_event_ticks > 0:
+            self.state.xp_event_ticks -= 1
+            if self.state.xp_event_ticks == 0:
+                self.state.xp_mult = 1.0
+                self.broadcast({"t": P.S_CHAT, "from": "Sistema", "scope": "global",
+                                "text": "✨ A Bênção de XP terminou."})
+        elif random.random() < 0.05:
+            self.state.xp_mult = 2.0
+            self.state.xp_event_ticks = 6  # ~30s de XP em dobro
+            self.broadcast({"t": P.S_CHAT, "from": "Sistema", "scope": "global",
+                            "text": "✨ Bênção de XP! XP em DOBRO por tempo limitado!"})
+
     # ================= tick do mundo =================
+    def _move_enemies(self) -> None:
+        """Vagueia os inimigos; se um deles pisar num jogador, inicia combate.
+        Inimigos em combate ativo não se movem (posições puladas)."""
+        moves = self.state.world.wander_enemies(skip=set(self.state.encounters.keys()))
+        for _old, new, _enemy in moves:
+            for s in self.state.players_at(*new):
+                if not self._in_combat(s.pid):
+                    self._start_encounter(s.pid, new)
+
     async def world_tick(self) -> None:
         """Avança tempo, clima, respawns e autosave a cada 5s."""
         while True:
@@ -443,6 +775,8 @@ class GameServer:
                 self.state.weather = random.choice(WEATHERS)
             if random.random() < 0.5:
                 self.state.world.respawn_enemy()
+            self._tick_xp_event()
+            self._move_enemies()
             # autosave + atualização de relógio/clima para todos
             for s in self.state.sessions.values():
                 if s.connected:
