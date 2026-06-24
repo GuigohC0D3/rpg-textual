@@ -143,6 +143,23 @@ class World:
         self.spawn = (cx, cy)
         self._populate()
 
+    # ---- nível e elite por posição ----
+    def _enemy_level(self, x: int, y: int) -> int:
+        """Quanto mais longe da Vila (spawn), maior o nível do inimigo."""
+        sx, sy = self.spawn
+        dist = max(abs(x - sx), abs(y - sy))
+        return 1 + dist // 6
+
+    def _roll_elite(self) -> str | None:
+        from .enemy import ELITE_MODS
+        if self.rng.random() < 0.13:
+            return self.rng.choice(list(ELITE_MODS))
+        return None
+
+    def _spawn_enemy(self, x: int, y: int, eid: str):
+        from .enemy import Enemy
+        return Enemy.spawn(eid, level=self._enemy_level(x, y), elite=self._roll_elite())
+
     def _populate(self) -> None:
         from .enemy import Enemy
         density = 0.06
@@ -154,9 +171,8 @@ class World:
                 if self.rng.random() < density:
                     pool = enemies_for_region(region)
                     if pool:
-                        self.enemies[(x, y)] = Enemy.spawn(self.rng.choice(pool))
-        # posiciona um chefe por região não-segura
-        placed = set()
+                        self.enemies[(x, y)] = self._spawn_enemy(x, y, self.rng.choice(pool))
+        # posiciona um chefe por região não-segura (escala por distância, sem elite)
         for region in REGIONS:
             if REGIONS[region]["safe"]:
                 continue
@@ -166,9 +182,9 @@ class World:
             tiles = [(x, y) for y in range(self.height) for x in range(self.width)
                      if self.grid[y][x] == region and (x, y) not in self.enemies]
             if tiles:
-                pos = self.rng.choice(tiles)
-                self.enemies[pos] = Enemy.spawn(self.rng.choice(bosses))
-                placed.add(pos)
+                x, y = self.rng.choice(tiles)
+                self.enemies[(x, y)] = Enemy.spawn(self.rng.choice(bosses),
+                                                   level=self._enemy_level(x, y))
 
     # ---- consultas ----
     def region_at(self, x: int, y: int) -> str:
@@ -179,39 +195,64 @@ class World:
 
     def respawn_enemy(self) -> None:
         """Repõe um inimigo aleatório no mapa (chamado periodicamente)."""
-        from .enemy import Enemy
         x, y = self.rng.randrange(self.width), self.rng.randrange(self.height)
         region = self.grid[y][x]
         if REGIONS[region]["safe"] or (x, y) in self.enemies:
             return
         pool = enemies_for_region(region)
         if pool:
-            self.enemies[(x, y)] = Enemy.spawn(self.rng.choice(pool))
+            self.enemies[(x, y)] = self._spawn_enemy(x, y, self.rng.choice(pool))
 
-    def wander_enemies(self, skip=frozenset(), move_chance: float = 0.25):
+    def random_unsafe_tile(self) -> tuple[int, int] | None:
+        """Um tile livre fora de zona segura (para nascer um world boss)."""
+        for _ in range(200):
+            x, y = self.rng.randrange(self.width), self.rng.randrange(self.height)
+            if not REGIONS[self.grid[y][x]]["safe"] and (x, y) not in self.enemies:
+                return (x, y)
+        return None
+
+    def wander_enemies(self, skip=frozenset(), move_chance: float = 0.25,
+                       targets=(), aggro: int = 6):
         """Move inimigos (exceto chefes) para um tile adjacente válido.
 
-        Regras: permanece no mapa, NUNCA entra em zona segura (vila) e não pisa
-        sobre outro inimigo. Chefes ficam parados guardando sua região. `skip`
-        contém posições a ignorar (ex.: inimigos em combate ativo).
-        Retorna [(pos_antiga, pos_nova, enemy)] dos que efetivamente se moveram.
+        Se houver um jogador dentro do raio de perseguição (`aggro`), o inimigo
+        CAÇA — dá um passo em direção a ele em vez de vagar. Sempre permanece no
+        mapa, NUNCA entra em zona segura (vila) e não pisa sobre outro inimigo.
+        `skip` ignora posições (ex.: inimigos em combate ativo).
+        Retorna [(pos_antiga, pos_nova, enemy)] dos que se moveram.
         """
         moves = []
         for pos in list(self.enemies.keys()):
             if pos in skip:
                 continue
             enemy = self.enemies[pos]
-            if getattr(enemy, "boss", False):
+            if getattr(enemy, "boss", False) or getattr(enemy, "world_boss", False):
                 continue
-            if self.rng.random() >= move_chance:
-                continue
-            dx, dy = self.rng.choice(((0, 1), (0, -1), (1, 0), (-1, 0)))
-            nx, ny = pos[0] + dx, pos[1] + dy
+            x, y = pos
+            # alvo (jogador) mais próximo dentro do raio de perseguição
+            tgt, best = None, aggro + 1
+            for tx, ty in targets:
+                d = max(abs(tx - x), abs(ty - y))
+                if d < best:
+                    best, tgt = d, (tx, ty)
+            if tgt is not None:
+                dx = (tgt[0] > x) - (tgt[0] < x)
+                dy = (tgt[1] > y) - (tgt[1] < y)
+                if dx and dy:                          # move-se por um eixo de cada vez
+                    if abs(tgt[0] - x) >= abs(tgt[1] - y):
+                        dy = 0
+                    else:
+                        dx = 0
+            else:
+                if self.rng.random() >= move_chance:
+                    continue
+                dx, dy = self.rng.choice(((0, 1), (0, -1), (1, 0), (-1, 0)))
+            nx, ny = x + dx, y + dy
             if not self.in_bounds(nx, ny):
                 continue
-            if REGIONS[self.grid[ny][nx]]["safe"]:   # bloqueia a vila/zonas seguras
+            if REGIONS[self.grid[ny][nx]]["safe"]:     # bloqueia a vila/zonas seguras
                 continue
-            if (nx, ny) in self.enemies:             # tile já ocupado por inimigo
+            if (nx, ny) in self.enemies:               # tile já ocupado por inimigo
                 continue
             del self.enemies[pos]
             self.enemies[(nx, ny)] = enemy

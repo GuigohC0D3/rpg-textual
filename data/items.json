@@ -25,5 +25,8 @@
 
   "health_potion":{"name": "Poção de Vida",      "slot": "consumable", "rarity": "comum", "heal": 40, "value": 15, "stack": true},
   "mana_potion":  {"name": "Poção de Mana",      "slot": "consumable", "rarity": "comum", "restore": 35, "value": 15, "stack": true},
-  "elixir":       {"name": "Elixir Maior",       "slot": "consumable", "rarity": "raro",  "heal": 120, "restore": 80, "value": 90, "stack": true}
+  "elixir":       {"name": "Elixir Maior",       "slot": "consumable", "rarity": "raro",  "heal": 120, "restore": 80, "value": 90, "stack": true},
+  "elixir_might": {"name": "Elixir da Força",     "slot": "consumable", "rarity": "raro",  "buff": "atk_up", "buff_power": 12, "buff_turns": 3, "value": 70, "stack": true},
+  "elixir_guard": {"name": "Elixir da Guarda",    "slot": "consumable", "rarity": "raro",  "buff": "def_up", "buff_power": 16, "buff_turns": 3, "value": 70, "stack": true},
+  "monster_essence": {"name": "Essência Monstruosa", "slot": "material", "rarity": "comum", "value": 20, "stack": true}
 }

@@ -47,6 +47,7 @@ class GameState:
         self.guilds = GuildRegistry()                 # registro persistente de guildas
         self.xp_mult = 1.0                            # multiplicador global de XP (eventos)
         self.xp_event_ticks = 0                       # ticks restantes da bênção de XP
+        self.world_boss_pos: tuple[int, int] | None = None  # posição do chefe de mundo ativo
 
     # ---- sessões ----
     def players_at(self, x: int, y: int) -> list[Session]:

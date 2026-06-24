@@ -52,6 +52,7 @@ class GameScreen(Screen):
         ("3", "combat('skill')", "Habilidade"),
         ("4", "combat('item')", "Poção"),
         ("5", "combat('flee')", "Fugir"),
+        ("6", "combat('ult')", "Suprema"),
         ("r", "rest", "Descansar"),
         ("enter", "focus_chat", "Chat"),
         ("escape", "unfocus_chat", "Voltar"),
@@ -156,6 +157,9 @@ class GameScreen(Screen):
     def action_combat(self, combat_action: str) -> None:
         if self._in_combat:
             self.send_msg({"t": P.C_COMBAT, "action": combat_action})
+        elif combat_action == "item":
+            # fora de combate, a tecla de poção usa uma Poção de Vida rápida
+            self.send_msg({"t": P.C_ACTION, "cmd": "potion"})
 
     def action_rest(self) -> None:
         self.send_msg({"t": P.C_ACTION, "cmd": "rest"})

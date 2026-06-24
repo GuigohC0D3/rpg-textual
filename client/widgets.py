@@ -51,9 +51,13 @@ class Sidebar(Static):
 
         t.append("\nEquipamento:\n", style="bold underline")
         if p["equipment"]:
+            upgrades = p.get("upgrades", {})
             for slot, iid in p["equipment"].items():
                 t.append(f" {slot}: ", style="grey70")
-                t.append(f"{item_name(iid)}\n", style=RARITY_STYLE.get(_rarity(iid), "white"))
+                up = upgrades.get(iid, 0)
+                suffix = f" +{up}" if up else ""
+                t.append(f"{item_name(iid)}{suffix}\n",
+                         style=RARITY_STYLE.get(_rarity(iid), "white"))
         else:
             t.append(" (nada)\n", style="grey50")
 
@@ -110,7 +114,7 @@ class MapView(Static):
                 t.append(" ")
             t.append("\n")
         t.append("@ você  P outro  e inimigo  & CHEFE  •  "
-                 "WASD mover · Enter chat · 1-5 combate", style="grey50")
+                 "WASD mover · Enter chat · 1-6 combate", style="grey50")
         self.update(t)
 
 
@@ -129,6 +133,14 @@ class CombatPanel(Static):
         if c.get("art"):
             t.append(c["art"] + "\n", style="bright_red")
         t.append(_bar(c["enemy_hp"], c["enemy_max_hp"], 16, "red"))
-        t.append("\n\nAliados: " + ", ".join(c.get("allies", [])) + "\n", style="cyan")
-        t.append("\n[1]Atacar [2]Defender [3]Habilidade\n[4]Poção [5]Fugir", style="bright_white")
+        if c.get("enemy_status"):
+            t.append("\n☠ Inimigo: " + ", ".join(c["enemy_status"]), style="magenta")
+        if c.get("my_status"):
+            t.append("\n✦ Você: " + ", ".join(c["my_status"]), style="green")
+        t.append("\nAliados: " + ", ".join(c.get("allies", [])) + "\n", style="cyan")
+        ult = c.get("ult_name", "Suprema")
+        ult_cd = c.get("ult_cd", 0)
+        ult_label = f"[6]{ult} (recarga {ult_cd})" if ult_cd else f"[6]{ult}"
+        t.append("\n[1]Atacar [2]Defender [3]Habilidade\n[4]Poção [5]Fugir  ", style="bright_white")
+        t.append(ult_label, style="yellow" if not ult_cd else "grey50")
         self.update(t)

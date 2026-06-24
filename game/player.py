@@ -58,6 +58,7 @@ class Player:
     guild: str | None = None                                  # nome da guilda
     pet: dict | None = None                                   # {"name", "atk"}
     color: str = DEFAULT_COLOR                                # cor de identificação no mapa
+    upgrades: dict[str, int] = field(default_factory=dict)    # item_id -> nível de forja (+N)
 
     # ---- criação ----
     @classmethod
@@ -77,12 +78,17 @@ class Player:
         return p
 
     # ---- atributos efetivos (base + equipamento) ----
+    # Cada nível de forja (+N) aumenta os bônus do item em 8%.
+    FORGE_STEP = 0.08
+    FORGE_MAX = 5
+
     def _equip_bonus(self, key: str) -> float:
         total = 0.0
         for item_id in self.equipment.values():
             it = get_item(item_id)
             if it and key in it:
-                total += it[key]
+                factor = 1 + self.FORGE_STEP * self.upgrades.get(item_id, 0)
+                total += it[key] * factor
         return total
 
     @property
@@ -211,4 +217,5 @@ class Player:
             "skill": self.skill["name"],
             "quests": self.quests, "party": self.party,
             "guild": self.guild, "pet": self.pet, "color": self.color,
+            "upgrades": self.upgrades,
         }

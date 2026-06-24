@@ -18,7 +18,8 @@ from dataclasses import dataclass, field
 
 from common import protocol as P
 from game.combat import Encounter
-from game.items import describe, get_item, item_name, item_value, shop_catalog
+from game.items import (describe, get_item, is_equippable, item_name,
+                        item_value, shop_catalog)
 from game.map import REGIONS
 from game.player import Player, sanitize_color
 from game.quests import all_quests, offer
@@ -289,6 +290,11 @@ class GameServer:
         # remove inimigo derrotado do mundo
         if enc.victory and enc.pos in self.state.world.enemies:
             del self.state.world.enemies[enc.pos]
+        # chefe de mundo derrotado: anúncio global e libera novo spawn
+        if enc.victory and enc.enemy.world_boss:
+            self.state.world_boss_pos = None
+            self.broadcast({"t": P.S_CHAT, "from": "Sistema", "scope": "global",
+                            "text": f"🎉 O Chefe de Mundo {enc.enemy.name} foi derrotado pelos heróis!"})
         self.state.encounters.pop(enc.pos, None)
         # encerra UI de combate e atualiza mapa
         for ppid in list(enc.participants.keys()) + list(enc.rewards.keys()):
@@ -299,17 +305,28 @@ class GameServer:
                 s.player.save()
 
     def _check_deaths(self) -> None:
-        """Respawna jogadores derrotados na vila com metade do HP."""
+        """Respawna jogadores derrotados na vila — com penalidade de ouro e XP."""
         for s in self.state.sessions.values():
             if s.connected and s.player.hp <= 0:
-                s.player.hp = max(1, s.player.max_hp // 2)
-                s.player.mana = s.player.max_mana // 2
-                s.player.x, s.player.y = self.state.world.spawn
-                self.log(s.pid, "💀 Você caiu... e renasce na Vila.")
+                p = s.player
+                lost_gold = p.gold // 10
+                lost_xp = p.xp // 10
+                p.gold -= lost_gold
+                p.xp -= lost_xp
+                p.hp = max(1, p.max_hp // 2)
+                p.mana = p.max_mana // 2
+                p.x, p.y = self.state.world.spawn
+                penalty = []
+                if lost_gold:
+                    penalty.append(f"{lost_gold} ouro")
+                if lost_xp:
+                    penalty.append(f"{lost_xp} XP")
+                tail = f" Você perdeu {' e '.join(penalty)}." if penalty else ""
+                self.log(s.pid, f"💀 Você caiu... e renasce na Vila.{tail}")
                 self.send(s.pid, {"t": P.S_COMBAT, "active": False})
                 self.send_panel(s.pid)
                 self.send_state(s.pid)
-                s.player.save()
+                p.save()
 
     # ---- ações de mundo (NPC / descanso) ----
     def _handle_action(self, pid: int, cmd: str) -> None:
@@ -323,6 +340,11 @@ class GameServer:
                 self.send_panel(pid)
             else:
                 self.log(pid, "Só é possível descansar em zonas seguras (Vila).")
+        elif cmd == "potion":
+            # uso rápido de poção de vida fora de combate (tecla ou /use)
+            ok, msg = p.use_consumable("health_potion")
+            self.log(pid, msg)
+            self.send_panel(pid)
 
     # ================= chat & comandos =================
     def _find_by_name(self, name: str) -> Session | None:
@@ -350,8 +372,8 @@ class GameServer:
         self.log(pid,
             "Comandos: /help /who /msg <nome> <txt> /party [invite|accept] /roll [N] "
             "/emote <txt> /trade <nome> (depois: accept|gold|item|confirm|cancel) "
-            "/quests /accept <id> /equip <id> /use <id> /rest "
-            "/shop [buy|sell] /guild [create|join|leave|info|list] /ranking")
+            "/quests /accept <id> /equip <id> /use <id> /rest /inventario "
+            "/shop [buy|sell] /forge <id> /guild [create|join|leave|info|list] /ranking")
 
     def _cmd_who(self, pid, args):
         self.log(pid, "Online: " + ", ".join(self.state.online_names()))
@@ -728,6 +750,52 @@ class GameServer:
         self.log(pid, f"💰 Vendeu {qty}x {item_name(iid)} por {gain} ouro.")
         self.send_panel(pid)
 
+    # ---- forja (apenas em zona segura) ----
+    def _forge_cost(self, iid: str, lvl: int) -> int:
+        return int(item_value(iid) * 0.5 * (lvl + 1)) + 20
+
+    def _cmd_forge(self, pid, args):
+        p = self.state.sessions[pid].player
+        if not REGIONS[self.state.world.region_at(p.x, p.y)]["safe"]:
+            self.log(pid, "⚒ Só é possível forjar em zonas seguras (Vila).")
+            return
+        if not args:
+            self.log(pid, "⚒ Forja (consome ouro + 1 Essência Monstruosa). /forge <item_id>:")
+            forjaveis = {**{iid: 0 for iid in p.equipment.values()},
+                         **{iid: 0 for iid in p.inventory if is_equippable(iid)}}
+            if not forjaveis:
+                self.log(pid, "  (nenhum equipamento para forjar)")
+            for iid in forjaveis:
+                lvl = p.upgrades.get(iid, 0)
+                cap = "MÁX" if lvl >= Player.FORGE_MAX else f"{self._forge_cost(iid, lvl)} ouro"
+                self.log(pid, f"  {iid} +{lvl} → {cap}")
+            return
+        iid = args[0]
+        if not is_equippable(iid):
+            self.log(pid, "Só equipamentos podem ser forjados.")
+            return
+        if iid not in p.equipment.values() and p.inventory.get(iid, 0) <= 0:
+            self.log(pid, "Você não possui esse equipamento.")
+            return
+        lvl = p.upgrades.get(iid, 0)
+        if lvl >= Player.FORGE_MAX:
+            self.log(pid, f"{item_name(iid)} já está no nível máximo (+{Player.FORGE_MAX}).")
+            return
+        cost = self._forge_cost(iid, lvl)
+        if p.gold < cost:
+            self.log(pid, f"Ouro insuficiente: a forja custa {cost}.")
+            return
+        if p.inventory.get("monster_essence", 0) < 1:
+            self.log(pid, "Falta 1 Essência Monstruosa (cai de elites e chefes).")
+            return
+        p.gold -= cost
+        p.remove_item("monster_essence")
+        p.upgrades[iid] = lvl + 1
+        p.refresh_maxes()
+        p.save()
+        self.log(pid, f"⚒ Forjado! {item_name(iid)} agora é +{lvl + 1}.")
+        self.send_panel(pid)
+
     # ---- ranking ----
     def _cmd_ranking(self, pid, args):
         live = {s.player.name.lower(): {
@@ -758,13 +826,45 @@ class GameServer:
 
     # ================= tick do mundo =================
     def _move_enemies(self) -> None:
-        """Vagueia os inimigos; se um deles pisar num jogador, inicia combate.
+        """Inimigos caçam jogadores próximos; ao pisar num jogador, iniciam combate.
         Inimigos em combate ativo não se movem (posições puladas)."""
-        moves = self.state.world.wander_enemies(skip=set(self.state.encounters.keys()))
+        targets = [(s.player.x, s.player.y) for s in self.state.sessions.values()
+                   if s.connected]
+        moves = self.state.world.wander_enemies(
+            skip=set(self.state.encounters.keys()), targets=targets)
         for _old, new, _enemy in moves:
             for s in self.state.players_at(*new):
                 if not self._in_combat(s.pid):
                     self._start_encounter(s.pid, new)
+
+    def _maybe_spawn_world_boss(self) -> None:
+        """Chance periódica de nascer um Chefe de Mundo que escala com os jogadores online."""
+        st = self.state
+        if st.world_boss_pos is not None:
+            return                                   # só um por vez
+        online = len(st.online_names())
+        if online == 0 or random.random() >= 0.04:
+            return
+        pos = st.world.random_unsafe_tile()
+        if pos is None:
+            return
+        from game.enemy import Enemy, bestiary
+        bosses = [eid for eid, e in bestiary().items() if e.get("boss")]
+        boss = Enemy.spawn(random.choice(bosses), level=7)
+        scale = 1 + 0.6 * online                     # mais jogadores -> mais forte
+        boss.hp = int(boss.hp * scale)
+        boss.max_hp = boss.hp
+        boss.atk = int(boss.atk * 1.3)
+        boss.xp = int(boss.xp * 2)
+        boss.gold = int(boss.gold * 2)
+        boss.world_boss = True
+        boss.name = f"{boss.name} (Chefe de Mundo)"
+        st.world.enemies[pos] = boss
+        st.world_boss_pos = pos
+        region = st.world.region_at(*pos)
+        self.broadcast({"t": P.S_CHAT, "from": "Sistema", "scope": "global",
+                        "text": f"🔥 Um CHEFE DE MUNDO surgiu em {region.capitalize()}! "
+                                "Reúnam-se e derrotem-no!"})
 
     async def world_tick(self) -> None:
         """Avança tempo, clima, respawns e autosave a cada 5s."""
@@ -777,6 +877,7 @@ class GameServer:
                 self.state.world.respawn_enemy()
             self._tick_xp_event()
             self._move_enemies()
+            self._maybe_spawn_world_boss()
             # autosave + atualização de relógio/clima para todos
             for s in self.state.sessions.values():
                 if s.connected:
