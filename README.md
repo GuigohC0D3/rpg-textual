@@ -125,7 +125,8 @@ Cada classe tem **uma skill barata** e **uma suprema cara com recarga** em turno
   inimigo (HP/ATK/recompensa).
 - **Elites** (~13%) com modificadores — Veloz, Blindado, Venenoso, **Brutal**
   (atordoa), Colossal — com nome destacado, atributos e loot melhores.
-- **IA caçadora**: inimigos perseguem jogadores próximos (nunca entram na Vila).
+- **Movimento livre**: inimigos vagueiam aleatoriamente pelo mapa (não perseguem
+  o jogador) e nunca entram na Vila.
 - **Chefes de mundo**: nascem periodicamente, **escalam com o nº de jogadores
   online**, são **anunciados no chat global** e largam tesouro garantido.
 - **Domar (pets)**: chance de domar um inimigo comum derrotado; o pet ataca junto.
@@ -200,8 +201,8 @@ save/            persistência por personagem (JSON, autosave a cada 5s) + guild
 - **Tempo real:** ao mover, o servidor reenvia o `state` (janela do mapa) ao
   jogador e aos próximos. A **janela do mapa se ajusta ao tamanho do painel**
   (negociação cliente↔servidor via `view`).
-- **Tick do mundo (5s):** relógio (dia/noite), clima, respawn, **movimento/caça
-  dos inimigos**, **evento de XP**, **chefe de mundo** e autosave de todos.
+- **Tick do mundo (5s):** relógio (dia/noite), clima, respawn, **movimento
+  aleatório dos inimigos**, **evento de XP**, **chefe de mundo** e autosave de todos.
 - **Reconexão:** queda → cliente reconecta com *backoff* exponencial e refaz o
   `join`; o servidor reconhece o jogador pelo nome e restaura a sessão.
 
