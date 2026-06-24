@@ -210,13 +210,23 @@ class GameServer:
         if enc is None:
             self.log(pid, "Você não está em combate.")
             return
+        before = set(enc.participants.keys())
         logs = enc.act(pid, action, item)
+        # destinatários dos logs incluem quem saiu nesta ação (fugitivo/derrotado)
+        recipients = list(before | set(self._spectators(enc)))
         for line in logs:
-            self.log_many(list(enc.participants.keys()) + self._spectators(enc), line)
-        # atualiza painéis e estado de combate dos participantes
+            self.log_many(recipients, line)
+        # atualiza painéis e estado de combate de quem continua na luta
         for ppid in list(enc.participants.keys()):
             self.send_panel(ppid)
             self.send_combat(ppid, enc)
+        # quem fugiu (saiu vivo): fecha o painel de combate do cliente
+        for ppid in before - set(enc.participants.keys()):
+            s = self.state.sessions.get(ppid)
+            if s and s.player.is_alive():
+                self.send(ppid, {"t": P.S_COMBAT, "active": False})
+                self.send_panel(ppid)
+                self.send_state(ppid)
 
         self._check_deaths()
 

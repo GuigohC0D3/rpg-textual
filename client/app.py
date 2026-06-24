@@ -71,12 +71,17 @@ class GameScreen(Screen):
         with Horizontal(id="main"):
             with Vertical(id="left"):
                 yield MapView(id="map")
-                # can_focus=False: os logs não roubam o foco nem capturam as setas.
-                yield RichLog(id="chat", markup=True, wrap=True, can_focus=False)
+                # can_focus=False (atributo de instância): os logs não roubam o
+                # foco nem capturam as setas. Não é aceito como kwarg do __init__.
+                chat = RichLog(id="chat", markup=True, wrap=True)
+                chat.can_focus = False
+                yield chat
             with Vertical(id="right"):
                 yield Sidebar(id="side")
                 yield CombatPanel(id="combat")
-                yield RichLog(id="log", markup=True, wrap=True, can_focus=False)
+                log = RichLog(id="log", markup=True, wrap=True)
+                log.can_focus = False
+                yield log
         yield Input(placeholder="Mensagem ou /comando (Enter envia, Esc volta)", id="cmd")
 
     def on_mount(self) -> None:

@@ -7,7 +7,7 @@ a única autoridade que modifica instâncias de Player.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 
 from . import SAVE_DIR
 from .classes import CLASSES
@@ -179,7 +179,9 @@ class Player:
             return None
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        return cls(**data)
+        # tolera saves de versões diferentes: ignora chaves desconhecidas
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
     # ---- visão para o cliente (painel lateral) ----
     def to_panel(self) -> dict:
