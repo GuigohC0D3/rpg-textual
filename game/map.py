@@ -211,13 +211,11 @@ class World:
                 return (x, y)
         return None
 
-    def wander_enemies(self, skip=frozenset(), move_chance: float = 0.25,
-                       targets=(), aggro: int = 6):
-        """Move inimigos (exceto chefes) para um tile adjacente válido.
+    def wander_enemies(self, skip=frozenset(), move_chance: float = 0.25):
+        """Move inimigos (exceto chefes) para um tile adjacente ALEATÓRIO.
 
-        Se houver um jogador dentro do raio de perseguição (`aggro`), o inimigo
-        CAÇA — dá um passo em direção a ele em vez de vagar. Sempre permanece no
-        mapa, NUNCA entra em zona segura (vila) e não pisa sobre outro inimigo.
+        Os inimigos vagueiam livremente — NÃO perseguem jogadores. Permanecem no
+        mapa, NUNCA entram em zona segura (vila) e não pisam sobre outro inimigo.
         `skip` ignora posições (ex.: inimigos em combate ativo).
         Retorna [(pos_antiga, pos_nova, enemy)] dos que se moveram.
         """
@@ -228,26 +226,10 @@ class World:
             enemy = self.enemies[pos]
             if getattr(enemy, "boss", False) or getattr(enemy, "world_boss", False):
                 continue
-            x, y = pos
-            # alvo (jogador) mais próximo dentro do raio de perseguição
-            tgt, best = None, aggro + 1
-            for tx, ty in targets:
-                d = max(abs(tx - x), abs(ty - y))
-                if d < best:
-                    best, tgt = d, (tx, ty)
-            if tgt is not None:
-                dx = (tgt[0] > x) - (tgt[0] < x)
-                dy = (tgt[1] > y) - (tgt[1] < y)
-                if dx and dy:                          # move-se por um eixo de cada vez
-                    if abs(tgt[0] - x) >= abs(tgt[1] - y):
-                        dy = 0
-                    else:
-                        dx = 0
-            else:
-                if self.rng.random() >= move_chance:
-                    continue
-                dx, dy = self.rng.choice(((0, 1), (0, -1), (1, 0), (-1, 0)))
-            nx, ny = x + dx, y + dy
+            if self.rng.random() >= move_chance:
+                continue
+            dx, dy = self.rng.choice(((0, 1), (0, -1), (1, 0), (-1, 0)))
+            nx, ny = pos[0] + dx, pos[1] + dy
             if not self.in_bounds(nx, ny):
                 continue
             if REGIONS[self.grid[ny][nx]]["safe"]:     # bloqueia a vila/zonas seguras

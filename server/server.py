@@ -826,12 +826,9 @@ class GameServer:
 
     # ================= tick do mundo =================
     def _move_enemies(self) -> None:
-        """Inimigos caçam jogadores próximos; ao pisar num jogador, iniciam combate.
+        """Inimigos vagueiam aleatoriamente; se um pisar num jogador, inicia combate.
         Inimigos em combate ativo não se movem (posições puladas)."""
-        targets = [(s.player.x, s.player.y) for s in self.state.sessions.values()
-                   if s.connected]
-        moves = self.state.world.wander_enemies(
-            skip=set(self.state.encounters.keys()), targets=targets)
+        moves = self.state.world.wander_enemies(skip=set(self.state.encounters.keys()))
         for _old, new, _enemy in moves:
             for s in self.state.players_at(*new):
                 if not self._in_combat(s.pid):
