@@ -20,6 +20,7 @@ from textual.widgets import Input, RichLog
 from common import protocol as P
 from common.protocol import decode, encode
 
+from .modals import InventoryModal, ShopModal
 from .screens import ConnectScreen
 from .widgets import CombatPanel, MapView, Sidebar
 
@@ -68,6 +69,8 @@ class GameScreen(Screen):
         self._writer: asyncio.StreamWriter | None = None
         self._closing = False
         self._in_combat = False
+        self.last_panel: dict | None = None      # última ficha (S_YOU) p/ os modais
+        self.last_region: str = ""               # região atual (p/ a loja)
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="main"):
@@ -131,11 +134,14 @@ class GameScreen(Screen):
     def _dispatch(self, msg: dict) -> None:
         t = msg.get("t")
         if t in (P.S_WELCOME, P.S_YOU):
+            self.last_panel = msg["player"]
             self.query_one("#side", Sidebar).update_panel(msg["player"])
+            self._refresh_modal()
             if t == P.S_WELCOME:
                 # já conectado e com layout pronto: pede a janela do tamanho do painel
                 self.query_one("#map", MapView).send_viewport()
         elif t == P.S_STATE:
+            self.last_region = msg["view"].get("region", "")
             self.query_one("#map", MapView).update_view(
                 msg["view"], msg["daynight"], msg["weather"], msg["hour"])
         elif t == P.S_CHAT:
@@ -144,6 +150,7 @@ class GameScreen(Screen):
                 f"[bold cyan]{msg['from']}:[/] [{color}]{msg['text']}[/]")
         elif t == P.S_LOG:
             self.query_one("#log", RichLog).write(msg["text"])
+            self._modal_note(msg["text"])
         elif t == P.S_COMBAT:
             self._in_combat = bool(msg.get("active"))
             self.query_one("#combat", CombatPanel).show(msg)
@@ -170,12 +177,37 @@ class GameScreen(Screen):
     def action_unfocus_chat(self) -> None:
         self.set_focus(None)
 
+    # ---- modais (loja / inventário) ----
+    def _open_modal(self, modal) -> None:
+        if self.last_panel is None:
+            return
+        self.app.push_screen(modal)
+
+    def _active_modal(self):
+        top = self.app.screen
+        return top if isinstance(top, (ShopModal, InventoryModal)) else None
+
+    def _refresh_modal(self) -> None:
+        m = self._active_modal()
+        if m is not None and self.last_panel is not None:
+            m.refresh_data(self.last_panel)
+
+    def _modal_note(self, text: str) -> None:
+        m = self._active_modal()
+        if m is not None:
+            m.note(text)
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
-        if text:
-            self.send_msg({"t": P.C_CHAT, "text": text})
         event.input.value = ""
         self.set_focus(None)  # volta para o "modo movimento"
+        low = text.lower()
+        if low in ("/shop", "/loja"):
+            self._open_modal(ShopModal(self))
+        elif low in ("/inventario", "/inventário", "/inv", "/inventory"):
+            self._open_modal(InventoryModal(self))
+        elif text:
+            self.send_msg({"t": P.C_CHAT, "text": text})
 
 
 class RPGApp(App):
