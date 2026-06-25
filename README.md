@@ -111,11 +111,16 @@ Cada classe tem **uma skill barata** e **uma suprema cara com recarga** em turno
 - Encontros acontecem por inimigo num tile; vários jogadores no mesmo tile lutam
   **juntos**. Cada ação é resolvida pelo servidor e o inimigo **retalia contra
   quem agiu**. XP/ouro são divididos; saque é rolado individualmente.
+- **Ordem por velocidade (estilo Pokémon)**: quem tiver **`SPD` (speed) maior
+  golpeia primeiro** na rodada. Se o inimigo for mais rápido, ele ataca **antes**
+  da sua ação — o painel de combate mostra `⚡ SPD seu vs inimigo` e quem começa.
 - **Mitigação por defesa**: dano = atk · (1 − def/(def+50)) · variância ±15%,
   com **crítico ×2**.
-- **Efeitos de status**: veneno, queimadura, sangramento (dano por turno),
-  **atordoamento** (perde o turno), **regeneração** (cura por turno) e buffs
-  temporários de **força/defesa** (elixires). Tickam a cada turno.
+- **Efeitos de status**: veneno, queimadura, sangramento (**dano por turno**),
+  **atordoamento** (sempre perde o turno), **paralisia** (30% de chance de perder
+  o turno a cada rodada), **regeneração** (cura por turno) e buffs temporários de
+  **força/defesa** (elixires). Tickam a cada turno e valem para jogadores **e**
+  inimigos.
 - **Suprema (ult)** por classe, com **cooldown**; skills e ults podem **infligir
   status** ao inimigo.
 
@@ -124,7 +129,9 @@ Cada classe tem **uma skill barata** e **uma suprema cara com recarga** em turno
 - **Escala por distância**: quanto mais longe da Vila, maior o **nível** do
   inimigo (HP/ATK/recompensa).
 - **Elites** (~13%) com modificadores — Veloz, Blindado, Venenoso, **Brutal**
-  (atordoa), Colossal — com nome destacado, atributos e loot melhores.
+  (atordoa), **Paralisante** (paraliza + rápido), Colossal — com nome destacado,
+  atributos e loot melhores. Alguns inimigos têm aflição própria (ex.: Escorpião
+  envenena, Espectro paralisa).
 - **Movimento livre**: inimigos vagueiam aleatoriamente pelo mapa (não perseguem
   o jogador) e nunca entram na Vila.
 - **Chefes de mundo**: nascem periodicamente, **escalam com o nº de jogadores
@@ -136,6 +143,9 @@ Cada classe tem **uma skill barata** e **uma suprema cara com recarga** em turno
 ### Itens, loot & forja
 - **Raridades**: comum, raro, épico, lendário (cores na ficha/loja).
 - Slots: arma, armadura, escudo, amuleto, anel + consumíveis e materiais.
+- **Stats à vista**: inventário e loja mostram os bônus de cada item
+  (`ATK`, `DEF`, `HP`, `MP`, `Crít`) e uma **seta de comparação ▲/▼** com o que
+  está equipado no mesmo slot — fácil saber qual arma/armadura é melhor.
 - **Drops de chefe garantidos**: bosses largam seu item mais forte; world bosses
   largam um extra.
 - **Forja (`/forge`)**: gasta ouro + **Essência Monstruosa** (cai de elites/chefes)
@@ -159,8 +169,9 @@ Cada classe tem **uma skill barata** e **uma suprema cara com recarga** em turno
 
 ### Interface
 - Tela dividida: **mapa** (preenche dinamicamente o painel), **chat**, **ficha**
-  e **log de combate**. Painel de combate mostra HP do inimigo, arte ASCII,
-  status ativos e a suprema.
+  e **log de combate**. A ficha mostra ATK/DEF/**SPD**/Crít. Painel de combate
+  mostra HP do inimigo, arte ASCII, status ativos, a **comparação de velocidade
+  (quem ataca primeiro)** e a suprema.
 - **Modais** interativos de **loja** e **inventário** (equipar/usar/organizar por
   categoria e raridade).
 - **Cor de identificação** por jogador, no mapa e na ficha.
