@@ -68,6 +68,47 @@ def shop_catalog() -> list[str]:
     return sorted(stock, key=item_value)
 
 
+# Rótulos curtos de cada bônus, para exibir dano/defesa nas listas da UI.
+STAT_LABELS = {
+    "atk": "ATK", "def": "DEF", "hp": "HP", "mana": "MP",
+    "crit": "Crít", "heal": "Cura", "restore": "Mana",
+}
+
+# Atributo "principal" de cada slot — usado para comparar equipamentos (▲/▼).
+SLOT_PRIMARY = {"weapon": "atk", "armor": "def", "shield": "def",
+                "amulet": "crit", "ring": "atk"}
+
+
+def stat_summary(item_id: str) -> str:
+    """Resumo curto dos bônus do item (ex.: 'ATK 8' ou 'DEF 10, HP 30')."""
+    it = get_item(item_id)
+    if not it:
+        return ""
+    parts = []
+    for k in ("atk", "def", "hp", "mana", "crit", "heal", "restore"):
+        if k in it:
+            v = it[k]
+            parts.append(f"{STAT_LABELS[k]} +{int(v * 100)}%" if k == "crit"
+                         else f"{STAT_LABELS[k]} {v}")
+    return ", ".join(parts)
+
+
+def compare_to_equipped(item_id: str, equipment: dict[str, str]) -> str:
+    """Seta ▲/▼ comparando o atributo principal do item ao já equipado no slot."""
+    it = get_item(item_id)
+    if not it:
+        return ""
+    key = SLOT_PRIMARY.get(it.get("slot"))
+    cur_id = equipment.get(it.get("slot")) if key else None
+    if not key or not cur_id:
+        return ""
+    diff = it.get(key, 0) - (get_item(cur_id) or {}).get(key, 0)
+    if not diff:
+        return ""
+    fmt = f"{int(diff * 100):+d}% {STAT_LABELS[key]}" if key == "crit" else f"{diff:+d} {STAT_LABELS[key]}"
+    return ("  ▲" if diff > 0 else "  ▼") + fmt
+
+
 def describe(item_id: str) -> str:
     """Texto curto com nome, raridade e bônus — usado em logs/inventário."""
     it = get_item(item_id)

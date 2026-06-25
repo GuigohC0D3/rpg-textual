@@ -15,7 +15,8 @@ from textual.widgets import OptionList, Static
 from textual.widgets.option_list import Option
 
 from common import protocol as P
-from game.items import EQUIP_SLOTS, get_item, item_name, item_value, is_equippable
+from game.items import (EQUIP_SLOTS, compare_to_equipped, get_item, is_equippable,
+                        item_name, item_value, stat_summary)
 
 SELL_RATE = 0.5
 
@@ -95,7 +96,10 @@ class ShopModal(_BaseModal):
         buy.clear_options()
         for iid in shop_catalog():
             it = get_item(iid)
-            buy.add_option(Option(f"{it['name']} — {item_value(iid)} ouro", id=f"buy:{iid}"))
+            stats = stat_summary(iid)
+            label = f"{it['name']} ({stats}) — {item_value(iid)} ouro" if stats \
+                else f"{it['name']} — {item_value(iid)} ouro"
+            buy.add_option(Option(label, id=f"buy:{iid}"))
 
         sell = self.query_one("#sell", OptionList)
         sell.clear_options()
@@ -162,15 +166,18 @@ class InventoryModal(_BaseModal):
                 items.add_option(Option(f"{iid} x{inv[iid]}", id=None))
                 continue
             qty = inv[iid]
+            stats = stat_summary(iid)
+            info = f"  ({stats})" if stats else ""
             if is_equippable(iid):
                 up = upgrades.get(iid, 0)
                 tag, oid = "[equipar]", f"equip:{iid}"
                 extra = f" +{up}" if up else ""
+                info += compare_to_equipped(iid, equip)
             elif it.get("slot") == "consumable":
                 tag, oid, extra = "[usar]", f"use:{iid}", ""
             else:
                 tag, oid, extra = "[material]", None, ""
-            items.add_option(Option(f"{it['name']}{extra} x{qty}  {tag}", id=oid))
+            items.add_option(Option(f"{it['name']}{extra} x{qty}{info}  {tag}", id=oid))
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         oid = event.option.id
