@@ -33,6 +33,7 @@ ELITE_MODS = {
     "Blindado":  {"def": 2.0, "hp": 1.4},
     "Venenoso":  {"atk": 1.05, "ailment": "poison"},
     "Brutal":    {"atk": 1.30, "ailment": "stun"},
+    "Paralisante": {"atk": 1.05, "speed": 1.3, "ailment": "paralysis"},
     "Colossal":  {"hp": 1.8, "atk": 1.25},
 }
 

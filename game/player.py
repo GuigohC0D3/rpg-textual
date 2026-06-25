@@ -211,7 +211,7 @@ class Player:
             "xp": self.xp, "xp_next": xp_to_next(self.level),
             "hp": self.hp, "max_hp": self.max_hp,
             "mana": self.mana, "max_mana": self.max_mana,
-            "atk": self.atk, "def": self.defense,
+            "atk": self.atk, "def": self.defense, "speed": self.speed,
             "crit": self.crit, "gold": self.gold,
             "inventory": self.inventory, "equipment": self.equipment,
             "skill": self.skill["name"],

@@ -43,7 +43,8 @@ class Sidebar(Static):
         t.append("MP   ", style="bold"); t.append(_bar(p["mana"], p["max_mana"], 12, "blue")); t.append("\n")
         t.append("XP   ", style="bold"); t.append(_bar(p["xp"], p["xp_next"], 12, "green")); t.append("\n\n")
 
-        t.append(f"ATK {p['atk']}   DEF {p['def']}   Crit {int(p['crit']*100)}%\n", style="white")
+        t.append(f"ATK {p['atk']}   DEF {p['def']}   SPD {p.get('speed', 0)}   "
+                 f"Crit {int(p['crit']*100)}%\n", style="white")
         t.append(f"Ouro: {p['gold']}\n", style="bright_yellow")
         t.append(f"Habilidade: {p['skill']}\n", style="cyan")
         if p.get("party"):
@@ -133,6 +134,9 @@ class CombatPanel(Static):
         if c.get("art"):
             t.append(c["art"] + "\n", style="bright_red")
         t.append(_bar(c["enemy_hp"], c["enemy_max_hp"], 16, "red"))
+        spd = f"\n⚡ SPD {c.get('my_speed', 0)} vs {c.get('enemy_speed', 0)} — "
+        spd += "inimigo ataca primeiro!" if c.get("enemy_first") else "você ataca primeiro"
+        t.append(spd, style="yellow" if c.get("enemy_first") else "green")
         if c.get("enemy_status"):
             t.append("\n☠ Inimigo: " + ", ".join(c["enemy_status"]), style="magenta")
         if c.get("my_status"):

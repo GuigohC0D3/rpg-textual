@@ -29,13 +29,18 @@ from .player import Player
 # mitigação = def / (def + DEF_K). Ex.: def 50 -> 50% de redução.
 DEF_K = 50
 
+# Chance de um combatente paralisado perder o turno (estilo Pokémon).
+PARALYZE_CHANCE = 0.30
+
 # Rótulos legíveis de cada efeito de status.
 STATUS_LABEL = {
     "poison": "veneno", "burn": "queimadura", "bleed": "sangramento",
-    "regen": "regeneração", "stun": "atordoamento",
+    "regen": "regeneração", "stun": "atordoamento", "paralysis": "paralisia",
     "atk_up": "força", "def_up": "defesa",
 }
 DOT_KINDS = ("poison", "burn", "bleed")
+# Status que controlam o turno e têm sua duração decrementada à parte (não em _tick).
+DISABLE_KINDS = ("stun", "paralysis")
 
 
 @dataclass
@@ -107,11 +112,35 @@ class Encounter:
             elif s.kind == "regen":
                 heal += int(s.power)
                 logs.append(f"  ✚ {name} regenera {int(s.power)}.")
-            if s.kind != "stun":
+            if s.kind not in DISABLE_KINDS:
                 s.turns -= 1
                 if s.turns <= 0:
                     statuses.remove(s)
         return dmg, heal, logs
+
+    def _check_disable(self, statuses: list[Status], name: str) -> tuple[bool, list[str]]:
+        """Atordoamento sempre faz perder o turno; paralisia tem chance (PARALYZE_CHANCE).
+
+        Decrementa a duração desses status (chamado UMA vez por turno do combatente).
+        Retorna (perdeu_turno, logs)."""
+        logs: list[str] = []
+        lost = False
+        stun = next((s for s in statuses if s.kind == "stun"), None)
+        if stun:
+            lost = True
+            logs.append(f"💫 {name} está atordoado e perde o turno!")
+            stun.turns -= 1
+            if stun.turns <= 0:
+                statuses.remove(stun)
+        para = next((s for s in statuses if s.kind == "paralysis"), None)
+        if para:
+            if not lost and random.random() < PARALYZE_CHANCE:
+                lost = True
+                logs.append(f"⚡ {name} está paralisado e não consegue se mover!")
+            para.turns -= 1
+            if para.turns <= 0:
+                statuses.remove(para)
+        return lost, logs
 
     def _inflict(self, statuses: list[Status], spec: dict | None, target: str) -> list[str]:
         if not spec:
@@ -148,17 +177,21 @@ class Encounter:
         if self.cooldowns.get(pid, 0) > 0:
             self.cooldowns[pid] -= 1
 
-        # 3) atordoamento: perde o turno
-        stun = next((s for s in pst if s.kind == "stun"), None)
-        if stun:
-            stun.turns -= 1
-            if stun.turns <= 0:
-                pst.remove(stun)
-            logs.append(f"💫 {player.name} está atordoado e perde o turno!")
+        # 3) atordoamento/paralisia: pode perder o turno
+        lost, dlogs = self._check_disable(pst, player.name)
+        if lost:
+            logs += dlogs
             logs += self._enemy_retaliate(pid)
             return logs
 
         atk_buff = self._buff(pst, "atk_up")
+
+        # ⚡ velocidade decide a ordem: o mais rápido golpeia primeiro (estilo Pokémon).
+        enemy_first = self.enemy.speed > player.speed
+        if enemy_first:
+            logs += self._enemy_retaliate(pid)
+            if not player.is_alive() or self.finished:
+                return logs
 
         if action == "attack":
             dmg, crit = _hit(player.atk + atk_buff, self.enemy.defense, player.crit)
@@ -207,8 +240,9 @@ class Encounter:
             logs += self._distribute_rewards()
             return logs
 
-        # retaliação do inimigo contra quem agiu
-        logs += self._enemy_retaliate(pid)
+        # retaliação do inimigo (a menos que ele já tenha golpeado primeiro)
+        if not enemy_first:
+            logs += self._enemy_retaliate(pid)
         return logs
 
     def _cast(self, player: Player, pid: int, spec: dict, atk_buff: int,
@@ -265,6 +299,10 @@ class Encounter:
             return []
         logs: list[str] = []
         pst = self.pstatus.setdefault(pid, [])
+        # o inimigo também pode estar atordoado/paralisado e perder o golpe
+        lost, dlogs = self._check_disable(self.estatus, self.enemy.name)
+        if lost:
+            return dlogs
         e_action = self.enemy.choose_action()
         mult = 1.6 if e_action == "skill" else 1.0
         def_buff = self._buff(pst, "def_up")
@@ -347,6 +385,9 @@ class Encounter:
             "enemy_max_hp": self.enemy.max_hp,
             "boss": self.enemy.boss,
             "art": self.enemy.art,
+            "enemy_speed": self.enemy.speed,
+            "my_speed": player.speed if player else 0,
+            "enemy_first": bool(player and self.enemy.speed > player.speed),
             "allies": [p.name for p in self.participants.values()],
             "enemy_status": [s.label for s in self.estatus],
             "my_status": [f"{s.label}·{s.turns}" for s in self.pstatus.get(pid, [])],

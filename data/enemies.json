@@ -4,8 +4,8 @@
   "bat":        {"name": "Morcego Gigante", "region": "caverna",  "hp": 50,  "atk": 11, "def": 2,  "speed": 14, "xp": 24,  "gold": 6,   "loot": ["mana_potion"]},
   "golem":      {"name": "Golem de Pedra",  "region": "caverna",  "hp": 180, "atk": 18, "def": 16, "speed": 4,  "xp": 70,  "gold": 30,  "loot": ["chain_mail", "wood_shield"]},
   "skeleton":   {"name": "Esqueleto",       "region": "ruinas",   "hp": 75,  "atk": 15, "def": 7,  "speed": 9,  "xp": 38,  "gold": 15,  "loot": ["iron_sword", "power_ring"]},
-  "wraith":     {"name": "Espectro",        "region": "ruinas",   "hp": 100, "atk": 22, "def": 8,  "speed": 12, "xp": 60,  "gold": 25,  "loot": ["arcane_staff", "luck_amulet"]},
-  "scorpion":   {"name": "Escorpião",       "region": "deserto",  "hp": 90,  "atk": 18, "def": 9,  "speed": 11, "xp": 50,  "gold": 20,  "loot": ["short_bow", "health_potion"]},
+  "wraith":     {"name": "Espectro",        "region": "ruinas",   "hp": 100, "atk": 22, "def": 8,  "speed": 12, "xp": 60,  "gold": 25,  "ailment": "paralysis", "loot": ["arcane_staff", "luck_amulet"]},
+  "scorpion":   {"name": "Escorpião",       "region": "deserto",  "hp": 90,  "atk": 18, "def": 9,  "speed": 11, "xp": 50,  "gold": 20,  "ailment": "poison", "loot": ["short_bow", "health_potion"]},
   "mummy":      {"name": "Múmia",           "region": "deserto",  "hp": 130, "atk": 20, "def": 12, "speed": 6,  "xp": 70,  "gold": 35,  "loot": ["sage_amulet", "elixir"]},
   "guard":      {"name": "Guarda Corrupto", "region": "castelo",  "hp": 150, "atk": 21, "def": 14, "speed": 8,  "xp": 78,  "gold": 40,  "loot": ["plate_armor", "tower_shield"]},
 
